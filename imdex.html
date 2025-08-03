@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Slot - Firebase</title>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <style>
+        /* CSS Lengkap dari kode sebelumnya */
+        /* ... [Salin semua kode CSS di sini] ... */
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>🔥 Slot Machine 🔥</h1>
+            <p class="subtitle">Mainkan slot, menangkan hadiah, dan nikmati pengalaman bermain!</p>
+        </header>
+        
+        <!-- Auth Container -->
+        <div id="auth-container" class="auth-container active card">
+            <h2>Login / Register</h2>
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" placeholder="Masukkan email">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="Masukkan password">
+            </div>
+            <div class="messages" id="auth-message"></div>
+            <button id="login-btn">Login</button>
+            <button id="register-btn" class="btn-secondary">Register Akun Baru</button>
+            <div style="text-align: center; margin-top: 20px; color: #aaa;">
+                <p>Akun baru akan mendapatkan $10 gratis!</p>
+                <p>Admin: admin@example.com / admin123</p>
+            </div>
+        </div>
+        
+        <!-- Game Container -->
+        <div id="game-container" class="game-container card">
+            <h2>Selamat Bermain!</h2>
+            <div class="wallet-info">
+                Saldo Anda: $<span id="wallet-amount" class="wallet-amount">0</span>
+            </div>
+            
+            <div class="topup-id">
+                ID TopUp Anda: <span id="topup-id">1234567890</span>
+            </div>
+            
+            <div class="slots-container">
+                <div class="slot slot1">
+                    <div class="slot-inner">🍒</div>
+                </div>
+                <div class="slot slot2">
+                    <div class="slot-inner">🍋</div>
+                </div>
+                <div class="slot slot3">
+                    <div class="slot-inner">🍇</div>
+                </div>
+            </div>
+            
+            <div class="messages" id="game-message"></div>
+            
+            <button id="spin-btn">Putar Slot ($1)</button>
+            <button id="logout-btn" class="btn-secondary">Logout</button>
+            <button id="go-to-admin" class="btn-admin">Admin Panel</button>
+            
+            <!-- Admin Section (only visible to admin) -->
+            <div id="admin-section" class="admin-section" style="display: none;">
+                <h3>Admin Panel - Top Up</h3>
+                <div class="form-group">
+                    <label for="topup-user-id">ID Pengguna</label>
+                    <input type="text" id="topup-user-id" placeholder="Masukkan ID pengguna">
+                </div>
+                <div class="form-group">
+                    <label for="topup-amount">Jumlah Top Up ($)</label>
+                    <input type="number" id="topup-amount" placeholder="Masukkan jumlah">
+                </div>
+                <button id="topup-btn" class="btn-admin">Top Up Saldo</button>
+                <div class="messages" id="admin-message"></div>
+            </div>
+        </div>
+        
+        <!-- Admin Container -->
+        <div id="admin-container" class="admin-container card">
+            <h2>Admin Top Up</h2>
+            <div class="form-group">
+                <label for="admin-topup-id">ID Pengguna</label>
+                <input type="text" id="admin-topup-id" placeholder="Masukkan ID pengguna">
+            </div>
+            <div class="form-group">
+                <label for="admin-amount">Jumlah Top Up ($)</label>
+                <input type="number" id="admin-amount" placeholder="Masukkan jumlah">
+            </div>
+            <button id="admin-topup-btn" class="btn-admin">Proses Top Up</button>
+            <button id="admin-back-btn" class="btn-secondary">Kembali ke Game</button>
+            <div class="messages" id="admin-panel-message"></div>
+        </div>
+    </div>
+
+    <script>
+        // Konfigurasi Firebase (Ganti dengan konfigurasi Anda)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBFynnFgGolqXF38B--2sjHcmBAWBZxoPo",
+            authDomain: "game-7b8a3.firebaseapp.com",
+            projectId: "game-7b8a3",
+            storageBucket: "game-7b8a3.appspot.com",
+            messagingSenderId: "474703291763",
+            appId: "1:474703291763:web:ee4e0f02ab8949f5b71106",
+            measurementId: "G-12FTD4R6M9"
+        };
+
+        // Inisialisasi Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // Referensi DOM
+        const authContainer = document.getElementById('auth-container');
+        const gameContainer = document.getElementById('game-container');
+        const adminContainer = document.getElementById('admin-container');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const loginBtn = document.getElementById('login-btn');
+        const registerBtn = document.getElementById('register-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const spinBtn = document.getElementById('spin-btn');
+        const walletAmount = document.getElementById('wallet-amount');
+        const topupId = document.getElementById('topup-id');
+        const authMessage = document.getElementById('auth-message');
+        const gameMessage = document.getElementById('game-message');
+        const adminSection = document.getElementById('admin-section');
+        const topupUserId = document.getElementById('topup-user-id');
+        const topupAmount = document.getElementById('topup-amount');
+        const topupBtn = document.getElementById('topup-btn');
+        const adminTopupId = document.getElementById('admin-topup-id');
+        const adminAmount = document.getElementById('admin-amount');
+        const adminTopupBtn = document.getElementById('admin-topup-btn');
+        const adminBackBtn = document.getElementById('admin-back-btn');
+        const adminPanelMessage = document.getElementById('admin-panel-message');
+        const goToAdminBtn = document.getElementById('go-to-admin');
+
+        // State game
+        let currentUser = null;
+        const symbols = ['🍒', '🍋', '🍇', '🍉', '🍊', '⭐'];
+        let spinning = false;
+
+        // Fungsi untuk menampilkan pesan
+        function showMessage(element, message, isError = false) {
+            element.textContent = message;
+            element.className = 'messages ' + (isError ? 'error' : 'success');
+            setTimeout(() => {
+                element.className = 'messages';
+            }, 3000);
+        }
+
+        // Fungsi untuk menghasilkan ID topup acak
+        function generateTopupId() {
+            let id = '';
+            for (let i = 0; i < 10; i++) {
+                id += Math.floor(Math.random() * 10);
+            }
+            return id;
+        }
+
+        // Fungsi untuk mendapatkan data pengguna
+        async function getUserData(uid) {
+            try {
+                const userDoc = await db.collection('users').doc(uid).get();
+                return userDoc.exists ? userDoc.data() : null;
+            } catch (error) {
+                console.error('Error getting user data:', error);
+                return null;
+            }
+        }
+
+        // Fungsi untuk memperbarui data pengguna
+        async function updateUserData(uid, data) {
+            try {
+                await db.collection('users').doc(uid).update(data);
+                return true;
+            } catch (error) {
+                console.error('Error updating user data:', error);
+                return false;
+            }
+        }
+
+        // Fungsi login
+        loginBtn.addEventListener('click', async () => {
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            
+            if (!email || !password) {
+                showMessage(authMessage, 'Email dan password harus diisi!', true);
+                return;
+            }
+            
+            try {
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                currentUser = userCredential.user;
+                
+                const userData = await getUserData(currentUser.uid);
+                
+                if (userData) {
+                    walletAmount.textContent = userData.wallet;
+                    topupId.textContent = userData.topupId;
+                    
+                    if (email === 'admin@example.com') {
+                        adminSection.style.display = 'block';
+                    }
+                    
+                    authContainer.classList.remove('active');
+                    gameContainer.classList.add('active');
+                } else {
+                    showMessage(authMessage, 'Data pengguna tidak ditemukan', true);
+                }
+            } catch (error) {
+                showMessage(authMessage, error.message, true);
+            }
+        });
+
+        // Fungsi register
+        registerBtn.addEventListener('click', async () => {
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            
+            if (!email || !password) {
+                showMessage(authMessage, 'Email dan password harus diisi!', true);
+                return;
+            }
+            
+            try {
+                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                currentUser = userCredential.user;
+                
+                const userData = {
+                    email: email,
+                    wallet: 10,
+                    topupId: generateTopupId(),
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                
+                await db.collection('users').doc(currentUser.uid).set(userData);
+                
+                walletAmount.textContent = userData.wallet;
+                topupId.textContent = userData.topupId;
+                
+                authContainer.classList.remove('active');
+                gameContainer.classList.add('active');
+                
+                showMessage(gameMessage, 'Selamat datang! Anda mendapatkan $10 gratis!');
+            } catch (error) {
+                showMessage(authMessage, error.message, true);
+            }
+        });
+
+        // Fungsi logout
+        logoutBtn.addEventListener('click', () => {
+            auth.signOut();
+        });
+
+        // Fungsi putar slot
+        spinBtn.addEventListener('click', async () => {
+            if (spinning) return;
+            
+            const userData = await getUserData(currentUser.uid);
+            
+            if (!userData) {
+                showMessage(gameMessage, 'Gagal memuat data pengguna', true);
+                return;
+            }
+            
+            if (userData.wallet < 1) {
+                showMessage(gameMessage, 'Saldo tidak cukup!', true);
+                return;
+            }
+            
+            spinning = true;
+            spinBtn.disabled = true;
+            showMessage(gameMessage, 'Memutar...');
+            
+            const newWallet = userData.wallet - 1;
+            await updateUserData(currentUser.uid, { wallet: newWallet });
+            walletAmount.textContent = newWallet;
+            
+            const slots = document.querySelectorAll('.slot-inner');
+            let spins = 0;
+            const spinInterval = setInterval(() => {
+                slots.forEach(slot => {
+                    slot.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+                });
+                
+                spins++;
+                if (spins > 20) {
+                    clearInterval(spinInterval);
+                    finishSpin();
+                }
+            }, 100);
+        });
+
+        // Fungsi selesaikan putaran
+        async function finishSpin() {
+            const results = [
+                symbols[Math.floor(Math.random() * symbols.length)],
+                symbols[Math.floor(Math.random() * symbols.length)],
+                symbols[Math.floor(Math.random() * symbols.length)]
+            ];
+            
+            const slots = document.querySelectorAll('.slot-inner');
+            slots.forEach((slot, index) => {
+                slot.textContent = results[index];
+            });
+            
+            if (results[0] === results[1] && results[1] === results[2]) {
+                const userData = await getUserData(currentUser.uid);
+                const newWallet = userData.wallet + 10;
+                await updateUserData(currentUser.uid, { wallet: newWallet });
+                walletAmount.textContent = newWallet;
+                showMessage(gameMessage, 'JACKPOT! Anda memenangkan $10! 🎉');
+            } else if (results[0] === results[1] || results[1] === results[2] || results[0] === results[2]) {
+                const userData = await getUserData(currentUser.uid);
+                const newWallet = userData.wallet + 3;
+                await updateUserData(currentUser.uid, { wallet: newWallet });
+                walletAmount.textContent = newWallet;
+                showMessage(gameMessage, 'Selamat! Anda memenangkan $3!');
+            } else {
+                showMessage(gameMessage, 'Coba lagi!', true);
+            }
+            
+            spinning = false;
+            spinBtn.disabled = false;
+        }
+
+        // Fungsi top up (dalam game)
+        topupBtn.addEventListener('click', async () => {
+            const userId = topupUserId.value;
+            const amount = parseFloat(topupAmount.value);
+            
+            if (!userId || !amount || amount <= 0) {
+                showMessage(gameMessage, 'ID pengguna dan jumlah harus valid!', true);
+                return;
+            }
+            
+            try {
+                const userQuery = await db.collection('users').where('topupId', '==', userId).get();
+                
+                if (userQuery.empty) {
+                    showMessage(gameMessage, 'Pengguna tidak ditemukan!', true);
+                    return;
+                }
+                
+                const userDoc = userQuery.docs[0];
+                const userData = userDoc.data();
+                const newWallet = userData.wallet + amount;
+                
+                await db.collection('users').doc(userDoc.id).update({ wallet: newWallet });
+                
+                topupUserId.value = '';
+                topupAmount.value = '';
+                
+                showMessage(gameMessage, `Berhasil top up $${amount} ke pengguna ${userData.email}`);
+            } catch (error) {
+                showMessage(gameMessage, 'Gagal melakukan top up: ' + error.message, true);
+            }
+        });
+
+        // Fungsi top up (panel admin)
+        adminTopupBtn.addEventListener('click', async () => {
+            const userId = adminTopupId.value;
+            const amount = parseFloat(adminAmount.value);
+            
+            if (!userId || !amount || amount <= 0) {
+                showMessage(adminPanelMessage, 'ID pengguna dan jumlah harus valid!', true);
+                return;
+            }
+            
+            try {
+                const userQuery = await db.collection('users').where('topupId', '==', userId).get();
+                
+                if (userQuery.empty) {
+                    showMessage(adminPanelMessage, 'Pengguna tidak ditemukan!', true);
+                    return;
+                }
+                
+                const userDoc = userQuery.docs[0];
+                const userData = userDoc.data();
+                const newWallet = userData.wallet + amount;
+                
+                await db.collection('users').doc(userDoc.id).update({ wallet: newWallet });
+                
+                adminTopupId.value = '';
+                adminAmount.value = '';
+                
+                showMessage(adminPanelMessage, `Berhasil top up $${amount} ke pengguna ${userData.email}`);
+            } catch (error) {
+                showMessage(adminPanelMessage, 'Gagal melakukan top up: ' + error.message, true);
+            }
+        });
+
+        // Navigasi antar panel
+        adminBackBtn.addEventListener('click', () => {
+            adminContainer.classList.remove('active');
+            gameContainer.classList.add('active');
+        });
+
+        goToAdminBtn.addEventListener('click', () => {
+            gameContainer.classList.remove('active');
+            adminContainer.classList.add('active');
+        });
+
+        // Pantau status autentikasi
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                currentUser = user;
+                const userData = await getUserData(user.uid);
+                
+                if (userData) {
+                    walletAmount.textContent = userData.wallet;
+                    topupId.textContent = userData.topupId;
+                    
+                    if (user.email === 'admin@example.com') {
+                        adminSection.style.display = 'block';
+                    }
+                    
+                    authContainer.classList.remove('active');
+                    gameContainer.classList.add('active');
+                } else {
+                    showMessage(authMessage, 'Data pengguna tidak ditemukan', true);
+                }
+            } else {
+                currentUser = null;
+                gameContainer.classList.remove('active');
+                adminContainer.classList.remove('active');
+                authContainer.classList.add('active');
+                emailInput.value = '';
+                passwordInput.value = '';
+                adminSection.style.display = 'none';
+            }
+        });
+
+        // Inisialisasi slot
+        document.querySelectorAll('.slot-inner').forEach((slot, index) => {
+            slot.textContent = symbols[index];
+        });
+    </script>
+</body>
+</html>
